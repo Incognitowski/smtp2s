@@ -1,3 +1,4 @@
+#[derive(Default)]
 pub struct Metadata {
     pub client: String,
     pub authenticated_user: Option<String>,
@@ -11,23 +12,6 @@ pub struct Metadata {
     pub message_id: Option<String>,
 }
 
-impl Metadata {
-    pub fn new() -> Self {
-        Self {
-            client: String::new(),
-            authenticated_user: None,
-            from: String::new(),
-            recipients: vec![],
-            to: vec![],
-            cc: vec![],
-            bcc: vec![],
-            subject: String::new(),
-            date: None,
-            message_id: None,
-        }
-    }
-}
-
 pub enum AuthState {
     AwaithAuthRequest,
     RequestingUsername,
@@ -35,11 +19,10 @@ pub enum AuthState {
 }
 pub enum State {
     Initialized,
-    AwaitingAuth {
+    Authenticating {
         state: AuthState,
         username: Option<String>,
     },
-    Authenticated,
     ProvidingHeaders,
     ProvidingData,
     Quitting,

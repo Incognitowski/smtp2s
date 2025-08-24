@@ -12,13 +12,15 @@ pub fn handle_message(
     message_metadata: &mut Metadata,
     state: &mut State,
 ) -> Vec<Vec<u8>> {
+    // SAFETY: I think I can trim the input here. But we might have to refactor this when consuming buffers during `DATA` stage.
+    let buffer_str = match std::str::from_utf8(buffer) {
+        Ok(s) => s.trim(),
+        Err(_) => return vec![b"500 Invalid UTF-8 sequence".to_vec()],
+    };
+
     return match state {
-        State::Initialized => initialize_trade(buffer, message_metadata, state),
-        State::AwaitingAuth {
-            state: _,
-            username: _,
-        } => handle_auth_process(buffer, message_metadata, state),
-        State::Authenticated => todo!(),
+        State::Initialized => initialize_trade(buffer_str, message_metadata, state),
+        State::Authenticating { .. } => handle_auth_process(buffer_str, message_metadata, state),
         State::ProvidingHeaders => todo!(),
         State::ProvidingData => todo!(),
         State::Quitting => todo!(),
@@ -26,25 +28,25 @@ pub fn handle_message(
 }
 
 fn initialize_trade(
-    buffer: &[u8],
+    buffer_str: &str,
     message_metadata: &mut Metadata,
     state: &mut State,
 ) -> Vec<Vec<u8>> {
-    let buffer_str =
-        String::from_utf8(buffer.into()).expect("buffer to be a valid parseable string");
-    let (command, client) = buffer_str
-        .split_once(' ')
-        .expect("for initial command to be formatted as 'EHLO client-name'");
-    if command != "EHLO" {
+    let (command, client) = match buffer_str.split_once(' ') {
+        Some((cmd, cl)) => (cmd, cl),
+        None => return vec![b"501 Syntax error, expected: EHLO <domain>".to_vec()],
+    };
+
+    if !command.eq_ignore_ascii_case("EHLO") {
         return vec![b"552 Initial message must be EHLO".to_vec()];
     }
     message_metadata.client = client.trim().into();
-    *state = State::AwaitingAuth {
+    *state = State::Authenticating {
         state: AuthState::AwaithAuthRequest,
         username: None,
     };
     return vec![
-        format!("250-smtp-proxy.mycompany.com greets {}", client.trim())
+        format!("250-smtp-proxy.mycompany.com greets {}", client)
             .as_bytes()
             .to_vec(),
         b"250-AUTH LOGIN PLAIN".to_vec(),
@@ -54,60 +56,56 @@ fn initialize_trade(
 }
 
 fn handle_auth_process(
-    buffer: &[u8],
+    buffer_str: &str,
     message_metadata: &mut Metadata,
     state: &mut State,
 ) -> Vec<Vec<u8>> {
-    let (auth_state, username) = if let State::AwaitingAuth {
-        state: auth_state,
-        username,
-    } = state
-    {
-        (auth_state, username)
+    let (auth_state, username) = if let State::Authenticating { state, username } = state {
+        (state, username)
     } else {
-        return vec![b"552 Invalid state arrived at auth process".to_vec()];
+        unreachable!("handle_auth_process called with a state other than AwaitingAuth");
     };
 
     return match auth_state {
         AuthState::AwaithAuthRequest => {
-            let buffer_str =
-                String::from_utf8(buffer.into()).expect("Buffer should be a parseable String");
-            if buffer_str.trim() != "AUTH LOGIN" {
-                vec![b"552 Expected auth request".to_vec()]
+            if !buffer_str.eq_ignore_ascii_case("AUTH LOGIN") {
+                vec![b"502 Command not implemented, expected AUTH LOGIN".to_vec()]
             } else {
                 *auth_state = AuthState::RequestingUsername;
-                vec![b"334 VXNlcm5hbWU6".to_vec()]
+                vec![b"334 VXNlcm5hbWU6".to_vec()] // "Username:" in base64
             }
         }
         AuthState::RequestingUsername => {
-            let buffer_str =
-                String::from_utf8(buffer.into()).expect("Buffer should be a parseable String");
-            let parsed_username = match BASE64_STANDARD.decode(buffer_str.trim()) {
-                Ok(value) => {
-                    String::from_utf8(value).expect("Decoded username to be parseable as string")
-                }
-                Err(_) => return vec![b"552 Failed to decode username".to_vec()],
+            let decoded_username = match BASE64_STANDARD.decode(buffer_str) {
+                Ok(bytes) => bytes,
+                Err(_) => return vec![b"501 Syntax error in parameters (malformed base64)".to_vec()],
             };
-            info!("Parsed username: {:?}", parsed_username);
+            let parsed_username = match String::from_utf8(decoded_username) {
+                Ok(s) => s,
+                Err(_) => return vec![b"552 Invalid UTF-8 in username".to_vec()],
+            };
+
+            info!(?parsed_username, "Received username");
             message_metadata.authenticated_user = Some(parsed_username.clone());
             *username = Some(parsed_username);
             *auth_state = AuthState::RequestingPassword;
-            return vec![b"334 UGFzc3dvcmQ6".to_vec()];
+            vec![b"334 UGFzc3dvcmQ6".to_vec()] // "Password:" in base64
         }
         AuthState::RequestingPassword => {
-            let buffer_str =
-                String::from_utf8(buffer.into()).expect("Buffer should be a parseable String");
-            let parsed_password = match BASE64_STANDARD.decode(buffer_str.trim()) {
-                Ok(value) => {
-                    String::from_utf8(value).expect("Decoded password to be parseable as string")
-                }
-                Err(_) => return vec![b"552 Failed to decode password".to_vec()],
+            let decoded_password = match BASE64_STANDARD.decode(buffer_str) {
+                Ok(bytes) => bytes,
+                Err(_) => return vec![b"501 Syntax error in parameters (malformed base64)".to_vec()],
             };
-            info!("Parsed password: {:?}", parsed_password);
+            let parsed_password = match String::from_utf8(decoded_password) {
+                Ok(s) => s,
+                Err(_) => return vec![b"552 Invalid UTF-8 in password".to_vec()],
+            };
+
+            info!(?parsed_password, "Received password");
             // TODO: Actually validate user/password
             // Probably have to reset auth process if match fails
-            *state = State::Authenticated;
-            return vec![b"235 Authentication successful".to_vec()];
+            *state = State::ProvidingHeaders;
+            vec![b"235 2.7.0 Authentication successful".to_vec()]
         }
     };
 }

@@ -38,7 +38,7 @@ fn setup_logging() -> WorkerGuard {
 async fn handle_client(mut socket: TcpStream, addr: SocketAddr) {
     info!("Connection accepted");
     let mut buf = vec![0; 1024];
-    let mut message_metadata = smtp2s::models::Metadata::new();
+    let mut message_metadata = smtp2s::models::Metadata::default();
     let mut state = smtp2s::models::State::Initialized;
     loop {
         let n = match socket.read(&mut buf).await {
