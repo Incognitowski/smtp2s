@@ -1,4 +1,6 @@
-#[derive(Default)]
+use serde::Serialize;
+
+#[derive(Default, Serialize, Debug)]
 pub struct Metadata {
     pub client: String,
     pub authenticated_user: Option<String>,
@@ -17,13 +19,21 @@ pub enum AuthState {
     RequestingUsername,
     RequestingPassword,
 }
+
+pub enum HeadersState {
+    ProvidingFrom,
+    ProvidingRecipients,
+}
+
 pub enum State {
     Initialized,
     Authenticating {
         state: AuthState,
         username: Option<String>,
     },
-    ProvidingHeaders,
+    ProvidingHeaders {
+        state: HeadersState,
+    },
     ProvidingData,
     Quitting,
 }

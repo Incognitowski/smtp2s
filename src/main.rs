@@ -38,8 +38,10 @@ fn setup_logging() -> WorkerGuard {
 async fn handle_client(mut socket: TcpStream, addr: SocketAddr) {
     info!("Connection accepted");
     let mut buf = vec![0; 1024];
+    let mut data_vec : Vec<u8> = vec![];
     let mut message_metadata = smtp2s::models::Metadata::default();
     let mut state = smtp2s::models::State::Initialized;
+    let _ = socket.write_all(b"220 localhost ESMTP Service Ready\r\n").await;
     loop {
         let n = match socket.read(&mut buf).await {
             Ok(0) => {
@@ -53,12 +55,25 @@ async fn handle_client(mut socket: TcpStream, addr: SocketAddr) {
             Ok(n) => n,
         };
 
-        let response = smtp2s::handle_message(&buf[0..n], &mut message_metadata, &mut state);
+        let response = smtp2s::handle_message(
+            &buf[0..n], 
+            &mut message_metadata, 
+            &mut state,
+            &mut data_vec,
+        );
+        
+        if matches!(state,smtp2s::models::State::ProvidingData) && response.is_empty()  {
+            info!("Accepted data package, waiting for more or delimiter.");
+            continue;
+        }
 
         let mut entire_response = response.join("\r\n".as_bytes());
         entire_response.extend_from_slice(b"\r\n");
+
+        info!("About to reply with: {}", String::from_utf8(entire_response.clone()).unwrap());
 
         // Still have to learn how to handle broken pipe exceptions
         let _ = socket.write_all(&entire_response).await;
     }
 }
+
