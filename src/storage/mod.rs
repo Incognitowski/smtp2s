@@ -1,4 +1,7 @@
+mod attachment;
+
 pub mod local;
+pub mod s3;
 use crate::smtp::models::Metadata;
 use mail_parser::Message;
 

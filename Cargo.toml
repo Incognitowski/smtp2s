@@ -12,6 +12,8 @@ name = "smtp2s"
 path = "src/main.rs"
 
 [dependencies]
+aws-config = "1.8.6"
+aws-sdk-s3 = "1.104.0"
 base64 = "0.22.1"
 chrono = "0.4.41"
 mail-parser = "0.11.1"
