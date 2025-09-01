@@ -1,7 +1,15 @@
 [package]
 name = "smtp2s"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+[lib]
+name = "smtp2s"
+path = "src/lib.rs"
+
+[[bin]]
+name = "smtp2s"
+path = "src/main.rs"
 
 [dependencies]
 base64 = "0.22.1"

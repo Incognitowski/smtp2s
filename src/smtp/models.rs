@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-#[derive(Default, Serialize, Debug)]
+#[derive(Default, Serialize, Debug, Clone)]
 pub struct Metadata {
     pub client: String,
     pub authenticated_user: Option<String>,
