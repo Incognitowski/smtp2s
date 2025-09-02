@@ -7,7 +7,7 @@ use twoway::{find_str, rfind_bytes};
 use crate::smtp::models::{AuthState, HeadersState, Metadata, State};
 use crate::storage::Storage;
 
-pub fn handle_message<T: Storage>(
+pub async fn handle_message<T: Storage>(
     buffer: &[u8],
     message_metadata: &mut Metadata,
     state: &mut State,
@@ -32,7 +32,7 @@ pub fn handle_message<T: Storage>(
         State::Authenticating { .. } => handle_auth_process(buffer_str, message_metadata, state),
         State::ProvidingHeaders { .. } => handle_headers(buffer_str, message_metadata, state),
         State::ProvidingData => {
-            handle_data(buffer_str, message_metadata, state, data_vec, storage)
+            handle_data(buffer_str, message_metadata, state, data_vec, storage).await
         }
         State::Quitting => handle_quit(buffer_str),
     }
@@ -166,7 +166,7 @@ fn handle_headers(
 
 const DATA_TERMINATOR: &str = "\r\n.\r\n";
 
-fn handle_data<T: Storage>(
+async fn handle_data<T: Storage>(
     buffer_str: &str,
     message_metadata: &mut Metadata,
     state: &mut State,
@@ -189,7 +189,7 @@ fn handle_data<T: Storage>(
         message_metadata.date = message.date().map(|d| d.to_rfc3339());
         message_metadata.message_id = message.message_id().map(String::from);
 
-        if let Err(e) = storage.save(message_metadata, &message) {
+        if let Err(e) = storage.save(message_metadata, &message).await {
             error!(error.message = %e, "Failed to save message");
             return vec![b"554 Transaction failed".to_vec()];
         }

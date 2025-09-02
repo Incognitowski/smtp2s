@@ -68,7 +68,7 @@ async fn handle_client<T: Storage>(
             &mut state,
             &mut data_vec,
             storage.as_ref(),
-        );
+        ).await;
 
         if matches!(state, smtp::models::State::ProvidingData) && response.is_empty() {
             // TODO: Make this debug log optional

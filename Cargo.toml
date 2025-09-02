@@ -12,10 +12,14 @@ name = "smtp2s"
 path = "src/main.rs"
 
 [dependencies]
-aws-config = "1.8.6"
-aws-sdk-s3 = "1.104.0"
+async-recursion = "1.1.1"
+async-trait = "0.1.89"
+aws-config = {version = "1.8.6", features = ["behavior-version-latest"]}
+aws-sdk-s3 = {version = "1.104.0", features = ["behavior-version-latest"]}
+aws-smithy-http = "0.62.3"
 base64 = "0.22.1"
 chrono = "0.4.41"
+dotenvy = "0.15.7"
 mail-parser = "0.11.1"
 mime_guess = "2.0.5"
 sanitize-filename = "0.6.0"
