@@ -1,0 +1,8 @@
+{
+    "port": 8080,
+    "strategy": {
+        "type": "S3",
+        "bucket_name": "smtp2s-data-storage",
+        "override_aws_endpoint": "http://localhost:4566"
+    }
+}

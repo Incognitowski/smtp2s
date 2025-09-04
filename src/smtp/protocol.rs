@@ -7,12 +7,12 @@ use twoway::{find_str, rfind_bytes};
 use crate::smtp::models::{AuthState, HeadersState, Metadata, State};
 use crate::storage::Storage;
 
-pub async fn handle_message<T: Storage>(
+pub async fn handle_message(
     buffer: &[u8],
     message_metadata: &mut Metadata,
     state: &mut State,
     data_vec: &mut Vec<u8>,
-    storage: &T,
+    storage: &dyn Storage,
 ) -> Vec<Vec<u8>> {
     let buffer_str = match std::str::from_utf8(buffer) {
         Ok(s) => {
@@ -166,12 +166,12 @@ fn handle_headers(
 
 const DATA_TERMINATOR: &str = "\r\n.\r\n";
 
-async fn handle_data<T: Storage>(
+async fn handle_data(
     buffer_str: &str,
     message_metadata: &mut Metadata,
     state: &mut State,
     data_vec: &mut Vec<u8>,
-    storage: &T,
+    storage: &dyn Storage,
 ) -> Vec<Vec<u8>> {
     data_vec.extend_from_slice(buffer_str.as_bytes());
 

@@ -15,6 +15,6 @@ pub const NO_BODY_FALLBACK: &str = r#"
 "#;
 
 #[async_trait]
-pub trait Storage {
+pub trait Storage: Send + Sync {
     async fn save(&self, metadata: &Metadata, message: &Message<'_>) -> Result<(), std::io::Error>;
 }

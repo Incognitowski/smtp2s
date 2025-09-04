@@ -1,10 +1,16 @@
+use std::collections::HashSet;
+
+use async_recursion::async_recursion;
 use async_trait::async_trait;
 use aws_sdk_s3::{primitives::ByteStream, Client};
 use mail_parser::Message;
 use tracing::{error, info};
 use ulid::Ulid;
 
-use crate::{smtp::models::Metadata, storage::Storage};
+use crate::{
+    smtp::models::Metadata,
+    storage::{attachment::determine_attachment_name, Storage},
+};
 
 use super::NO_BODY_FALLBACK;
 
@@ -41,7 +47,10 @@ impl Storage for S3FileStorage {
             .into_bytes();
         self.upload_object(&message_key, message_body).await;
 
-        // TODO attachments
+        // Upload attachments
+        let mut file_names: HashSet<String> = HashSet::new();
+        self.save_attachments_from_message(message, &execution_id, 0, &mut file_names)
+            .await?;
 
         Ok(())
     }
@@ -68,5 +77,43 @@ impl S3FileStorage {
                 err.into_service_error()
             ),
         }
+    }
+
+    #[async_recursion]
+    async fn save_attachments_from_message(
+        &self,
+        msg: &mail_parser::Message<'_>,
+        execution_id: &str,
+        depth: usize,
+        file_names: &mut HashSet<String>,
+    ) -> Result<(), std::io::Error> {
+        for (i, part) in msg.attachments().enumerate() {
+            let original_name = determine_attachment_name(part, &depth, &i);
+            let mut name = original_name.clone();
+
+            while file_names.contains(&name) {
+                let ulid = &Ulid::new().to_string()[20..];
+                match name.rsplit_once('.') {
+                    Some((file_base_name, ext)) => {
+                        name = format!("{}-{}.{}", file_base_name, ulid, ext)
+                    }
+                    None => name = format!("{}-{}", name, ulid),
+                }
+            }
+
+            file_names.insert(name.clone());
+
+            self.upload_object(
+                &format!("{}/attachments/{}", execution_id, name),
+                part.contents().to_vec(),
+            )
+            .await;
+
+            if let Some(nested) = part.message() {
+                self.save_attachments_from_message(nested, execution_id, depth + 1, file_names)
+                    .await?;
+            }
+        }
+        Ok(())
     }
 }

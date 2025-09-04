@@ -2,10 +2,11 @@ pub mod smtp;
 pub mod storage;
 
 use std::net::SocketAddr;
+use std::str::FromStr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
@@ -15,13 +16,10 @@ use tracing_subscriber::{fmt, Registry};
 use crate::smtp::protocol::handle_message;
 use crate::storage::Storage;
 
-pub async fn run_server<T>(
+pub async fn run_server(
     addr: &str,
-    storage_strategy: T,
-) -> Result<(), Box<dyn std::error::Error>>
-where
-    T: Storage + Send + Sync + 'static,
-{
+    storage_strategy: Box<dyn Storage>,
+) -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting TCP server...");
     let listener = TcpListener::bind(addr).await?;
     info!("Server listening on port {}", listener.local_addr()?.port());
@@ -36,10 +34,10 @@ where
 }
 
 #[instrument(name = "client_handler", skip(socket, storage), fields(client.addr = %addr))]
-async fn handle_client<T: Storage>(
+async fn handle_client(
     mut socket: TcpStream,
     addr: SocketAddr,
-    storage: std::sync::Arc<T>,
+    storage: std::sync::Arc<Box<dyn Storage>>,
 ) {
     info!("Connection accepted");
     let mut buf = vec![0; 1024];
@@ -67,20 +65,19 @@ async fn handle_client<T: Storage>(
             &mut message_metadata,
             &mut state,
             &mut data_vec,
-            storage.as_ref(),
-        ).await;
+            &**storage,
+        )
+        .await;
 
         if matches!(state, smtp::models::State::ProvidingData) && response.is_empty() {
-            // TODO: Make this debug log optional
-            info!("Accepted data package, waiting for more or delimiter.");
+            debug!("Accepted data package, waiting for more or delimiter.");
             continue;
         }
 
         let mut entire_response = response.join("\r\n".as_bytes());
         entire_response.extend_from_slice(b"\r\n");
 
-        // TODO: Make this debug log optional
-        info!(
+        debug!(
             "About to reply with: {}",
             String::from_utf8(entire_response.clone()).unwrap()
         );
@@ -92,11 +89,11 @@ async fn handle_client<T: Storage>(
     }
 }
 
-pub fn setup_logging() -> WorkerGuard {
+pub fn setup_logging(log_level: &str) -> WorkerGuard {
     let (non_blocking_writer, _guard) =
         tracing_appender::non_blocking(tracing_appender::rolling::daily("logs", "smtp2s.log"));
     Registry::default()
-        .with(LevelFilter::INFO)
+        .with(LevelFilter::from_str(log_level).unwrap_or(LevelFilter::INFO))
         .with(fmt::layer().with_writer(std::io::stdout).pretty())
         .with(fmt::layer().with_writer(non_blocking_writer).json())
         .init();

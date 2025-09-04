@@ -1,0 +1,7 @@
+{
+    "port": 8080,
+    "strategy": {
+        "type": "Local",
+        "base_path": "./local-storage"
+    }
+}

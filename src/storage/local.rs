@@ -18,19 +18,20 @@ pub struct LocalFileStorage {
 impl Storage for LocalFileStorage {
     async fn save(&self, metadata: &Metadata, message: &Message<'_>) -> Result<(), std::io::Error> {
         let execution = Ulid::new().to_string();
-        let base_folder = &self.base_path;
+        let base_folder = &self.base_path.join(&execution);
         fs::create_dir_all(base_folder).await?;
+        fs::create_dir_all(base_folder.join("attachments")).await?;
 
         // Save metadata file
         fs::write(
-            base_folder.join(format!("{}-metadata.json", &execution)),
+            base_folder.join("metadata.json"),
             serde_json::to_string_pretty(&metadata).unwrap().as_bytes(),
         )
         .await?;
 
         // Save message body file
         fs::write(
-            base_folder.join(format!("{}-body.html", &execution)),
+            base_folder.join("body.html"),
             message
                 .body_html(0)
                 .unwrap_or(std::borrow::Cow::Owned(NO_BODY_FALLBACK.to_string()))
@@ -39,7 +40,7 @@ impl Storage for LocalFileStorage {
         .await?;
 
         // Save attachments
-        save_attachments_from_message(&message, &base_folder, 0).await?;
+        save_attachments_from_message(&message, &base_folder.join("attachments"), 0).await?;
 
         Ok(())
     }
