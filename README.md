@@ -22,3 +22,9 @@ cargo run -- --config-file=sample-configs/s3-config.json
 cargo run -- --config-file={config-file} --log-level=DEBUG
 ```
 > Default log level is `INFO`
+
+##### Controlling logging format on an output-basis
+```sh
+cargo run -- --config-file={config-file} --stdout-log-kind=pretty --file-log-kind=json
+```
+> Default for `stdout` is `pretty`, and for file-based is `json`

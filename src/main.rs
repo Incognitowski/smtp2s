@@ -1,18 +1,24 @@
 use std::fs::File;
 use std::io::BufReader;
+use std::str::FromStr;
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::{Client, Config};
-use clap::{command, Parser};
+use clap::{command, Parser, ValueEnum};
 use dotenvy::dotenv;
 use serde::Deserialize;
+use smtp2s::run_server;
 use smtp2s::storage::local::LocalFileStorage;
 use smtp2s::storage::s3::S3FileStorage;
 use smtp2s::storage::Storage;
-use smtp2s::{run_server, setup_logging};
 use std::path::PathBuf;
 use tracing::info;
+use tracing::level_filters::LevelFilter;
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt, Layer, Registry};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -20,7 +26,18 @@ struct Smpt2sArgs {
     #[arg(short, long)]
     config_file: String,
     #[arg(short, long, default_value = "INFO")]
-    log_level : String,
+    log_level: String,
+    #[arg(short, long, value_enum, default_value_t = LoggingType::Pretty)]
+    stdout_log_kind: LoggingType,
+    #[arg(short, long, value_enum, default_value_t = LoggingType::JSON)]
+    file_log_kind: LoggingType,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum LoggingType {
+    None,
+    Pretty,
+    JSON,
 }
 
 #[derive(Deserialize, Debug)]
@@ -47,7 +64,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Parsing args...");
     let args = Smpt2sArgs::parse();
 
-    let _observability_guard = setup_logging(&args.log_level);
+    let _observability_guard =
+        setup_logging(&args.log_level, args.stdout_log_kind, args.file_log_kind);
 
     info!("About to read config file from {}", args.config_file);
     let file = File::open(args.config_file)?;
@@ -96,4 +114,37 @@ async fn build_s3_file_storage(
     };
 
     return S3FileStorage::new(client, bucket_name);
+}
+
+pub fn setup_logging(
+    log_level: &str,
+    stdout_log_kind: LoggingType,
+    file_log_kind: LoggingType,
+) -> WorkerGuard {
+    let (non_blocking_writer, _guard) =
+        tracing_appender::non_blocking(tracing_appender::rolling::daily("logs", "smtp2s.log"));
+
+    let stdout_layer = match stdout_log_kind {
+        LoggingType::Pretty => Some(fmt::layer().with_writer(std::io::stdout).pretty().boxed()),
+        LoggingType::JSON => Some(fmt::layer().with_writer(std::io::stdout).json().boxed()),
+        LoggingType::None => None,
+    };
+
+    let file_layer = match file_log_kind {
+        LoggingType::Pretty => Some(
+            fmt::layer()
+                .with_writer(non_blocking_writer)
+                .pretty()
+                .boxed(),
+        ),
+        LoggingType::JSON => Some(fmt::layer().with_writer(non_blocking_writer).json().boxed()),
+        LoggingType::None => None,
+    };
+
+    Registry::default()
+        .with(LevelFilter::from_str(log_level).unwrap_or(LevelFilter::INFO))
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
+    _guard
 }

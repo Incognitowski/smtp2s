@@ -1,7 +1,7 @@
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use mail_parser::{Address, MessageParser};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use twoway::{find_str, rfind_bytes};
 
 use crate::smtp::models::{AuthState, HeadersState, Metadata, State};
@@ -25,7 +25,7 @@ pub async fn handle_message(
         Err(_) => return vec![b"500 Invalid UTF-8 sequence".to_vec()],
     };
 
-    info!(buffer_str, "Received command");
+    debug!(buffer_str, "Received command");
 
     match state {
         State::Initialized => initialize_trade(buffer_str, message_metadata, state),

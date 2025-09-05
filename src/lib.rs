@@ -2,16 +2,10 @@ pub mod smtp;
 pub mod storage;
 
 use std::net::SocketAddr;
-use std::str::FromStr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, instrument};
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, Registry};
 
 use crate::smtp::protocol::handle_message;
 use crate::storage::Storage;
@@ -87,15 +81,4 @@ async fn handle_client(
             return;
         }
     }
-}
-
-pub fn setup_logging(log_level: &str) -> WorkerGuard {
-    let (non_blocking_writer, _guard) =
-        tracing_appender::non_blocking(tracing_appender::rolling::daily("logs", "smtp2s.log"));
-    Registry::default()
-        .with(LevelFilter::from_str(log_level).unwrap_or(LevelFilter::INFO))
-        .with(fmt::layer().with_writer(std::io::stdout).pretty())
-        .with(fmt::layer().with_writer(non_blocking_writer).json())
-        .init();
-    _guard
 }
