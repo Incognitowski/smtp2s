@@ -28,3 +28,33 @@ cargo run -- --config-file={config-file} --log-level=DEBUG
 cargo run -- --config-file={config-file} --stdout-log-kind=pretty --file-log-kind=json
 ```
 > Default for `stdout` is `pretty`, and for file-based is `json`
+
+##### Controlling file based log directory
+```sh
+cargo run -- --config-file={config-file} --file-log-dir=/logs/smtp2s
+```
+> Default is `logs`
+
+#### `config-file` structure
+```json
+{
+    // The port smtp2s will be server on
+    "port": 8080,
+    // --- Strategies ---
+    // S3 - Requires a bucket name and an optional override_aws_endpoint
+    "strategy": {
+        "type": "S3",
+        "bucket_name": "smtp2s-data-storage",
+        "override_aws_endpoint": "http://localhost:4566"
+    },
+    // Local - Requires a base path to store files
+    "strategy": {
+        "type": "Local",
+        "base_path": "./local-storage"
+    },
+    // List of addresses allowed to submit e-mails, or "*" for any.
+    "allowed_addresses": [
+        "*"
+    ]
+}
+```

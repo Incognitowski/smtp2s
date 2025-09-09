@@ -13,6 +13,7 @@ pub async fn handle_message(
     state: &mut State,
     data_vec: &mut Vec<u8>,
     storage: &dyn Storage,
+    allowed_addresses: &Vec<String>,
 ) -> Vec<Vec<u8>> {
     let buffer_str = match std::str::from_utf8(buffer) {
         Ok(s) => {
@@ -29,7 +30,7 @@ pub async fn handle_message(
 
     match state {
         State::Initialized => initialize_trade(buffer_str, message_metadata, state),
-        State::Authenticating { .. } => handle_auth_process(buffer_str, message_metadata, state),
+        State::Authenticating { .. } => handle_auth_process(buffer_str, message_metadata, state, allowed_addresses),
         State::ProvidingHeaders { .. } => handle_headers(buffer_str, message_metadata, state),
         State::ProvidingData => {
             handle_data(buffer_str, message_metadata, state, data_vec, storage).await
@@ -70,6 +71,7 @@ fn handle_auth_process(
     buffer_str: &str,
     message_metadata: &mut Metadata,
     state: &mut State,
+    allowed_addresses: &Vec<String>,
 ) -> Vec<Vec<u8>> {
     let (auth_state, username) = if let State::Authenticating { state, username } = state {
         (state, username)
@@ -99,13 +101,15 @@ fn handle_auth_process(
             };
 
             info!(?parsed_username, "Received username");
+            if !allowed_addresses.contains(&parsed_username) && !allowed_addresses.contains(&"*".to_string()) {
+                return vec![b"535 5.7.8 Authentication credentials invalid".to_vec()];
+            }
             message_metadata.authenticated_user = Some(parsed_username.clone());
             *username = Some(parsed_username);
             *auth_state = AuthState::RequestingPassword;
             vec![b"334 UGFzc3dvcmQ6".to_vec()] // "Password:" in base64
         }
         AuthState::RequestingPassword => {
-            // TODO: Actually validate user/password against provided file
             *state = State::ProvidingHeaders {
                 state: HeadersState::ProvidingFrom,
             };

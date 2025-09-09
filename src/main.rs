@@ -23,14 +23,16 @@ use tracing_subscriber::{fmt, Layer, Registry};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Smpt2sArgs {
-    #[arg(short, long)]
+    #[arg(long)]
     config_file: String,
-    #[arg(short, long, default_value = "INFO")]
+    #[arg(long, default_value = "INFO")]
     log_level: String,
-    #[arg(short, long, value_enum, default_value_t = LoggingType::Pretty)]
+    #[arg(long, value_enum, default_value_t = LoggingType::Pretty)]
     stdout_log_kind: LoggingType,
-    #[arg(short, long, value_enum, default_value_t = LoggingType::JSON)]
+    #[arg(long, value_enum, default_value_t = LoggingType::JSON)]
     file_log_kind: LoggingType,
+    #[arg(long, default_value = "logs")]
+    file_log_dir: String,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -56,6 +58,7 @@ enum Strategy {
 struct Smpt2sConfig {
     port: i32,
     strategy: Strategy,
+    allowed_addresses: Vec<String>,
 }
 
 #[tokio::main]
@@ -64,8 +67,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Parsing args...");
     let args = Smpt2sArgs::parse();
 
-    let _observability_guard =
-        setup_logging(&args.log_level, args.stdout_log_kind, args.file_log_kind);
+    let _observability_guard = setup_logging(
+        &args.log_level,
+        &args.stdout_log_kind,
+        &args.file_log_kind,
+        &args.file_log_dir,
+    );
 
     info!("About to read config file from {}", args.config_file);
     let file = File::open(args.config_file)?;
@@ -87,7 +94,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => Box::new(build_s3_file_storage(bucket_name, override_aws_endpoint).await),
     };
 
-    run_server(&format!("127.0.0.1:{}", config.port), storage_strategy).await
+    run_server(
+        &format!("127.0.0.1:{}", config.port),
+        storage_strategy,
+        &config.allowed_addresses,
+    )
+    .await
 }
 
 async fn build_s3_file_storage(
@@ -118,11 +130,13 @@ async fn build_s3_file_storage(
 
 pub fn setup_logging(
     log_level: &str,
-    stdout_log_kind: LoggingType,
-    file_log_kind: LoggingType,
+    stdout_log_kind: &LoggingType,
+    file_log_kind: &LoggingType,
+    file_log_dir: &str,
 ) -> WorkerGuard {
-    let (non_blocking_writer, _guard) =
-        tracing_appender::non_blocking(tracing_appender::rolling::daily("logs", "smtp2s.log"));
+    let (non_blocking_writer, _guard) = tracing_appender::non_blocking(
+        tracing_appender::rolling::daily(file_log_dir, "smtp2s.log"),
+    );
 
     let stdout_layer = match stdout_log_kind {
         LoggingType::Pretty => Some(fmt::layer().with_writer(std::io::stdout).pretty().boxed()),

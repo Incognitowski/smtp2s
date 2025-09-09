@@ -3,5 +3,8 @@
     "strategy": {
         "type": "Local",
         "base_path": "./local-storage"
-    }
+    },
+    "allowed_addresses": [
+        "*"
+    ]
 }

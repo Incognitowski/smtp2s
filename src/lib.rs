@@ -13,6 +13,7 @@ use crate::storage::Storage;
 pub async fn run_server(
     addr: &str,
     storage_strategy: Box<dyn Storage>,
+    allowed_addresses: &Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting TCP server...");
     let listener = TcpListener::bind(addr).await?;
@@ -23,15 +24,16 @@ pub async fn run_server(
     loop {
         let (socket, addr) = listener.accept().await?;
         let storage_strategy = storage.clone();
-        tokio::spawn(handle_client(socket, addr, storage_strategy));
+        tokio::spawn(handle_client(socket, addr, storage_strategy, allowed_addresses.clone()));
     }
 }
 
-#[instrument(name = "client_handler", skip(socket, storage), fields(client.addr = %addr))]
+#[instrument(name = "client_handler", skip(socket, storage, allowed_addresses), fields(client.addr = %addr))]
 async fn handle_client(
     mut socket: TcpStream,
     addr: SocketAddr,
     storage: std::sync::Arc<Box<dyn Storage>>,
+    allowed_addresses: Vec<String>,
 ) {
     info!("Connection accepted");
     let mut buf = vec![0; 1024];
@@ -60,6 +62,7 @@ async fn handle_client(
             &mut state,
             &mut data_vec,
             &**storage,
+            &allowed_addresses,
         )
         .await;
 
