@@ -5,6 +5,10 @@ A simple component that mimics an SMTP server but stores e-mail data instead of 
 
 This was built considering usage in tests or to relay messages from systems that only implement SMTP when you need the integration to be done via other means.
 
+#### Use Cases
+
+![Use cases diagram](__resources/use-cases.drawio.svg)
+
 ##### Running with local storage
 ```sh
 cargo run -- --config-file=sample-configs/local-storage-config.json
