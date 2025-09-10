@@ -94,10 +94,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => Box::new(build_s3_file_storage(bucket_name, override_aws_endpoint).await),
     };
 
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", config.port)).await?;
+    let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     run_server(
-        &format!("127.0.0.1:{}", config.port),
+        listener,
         storage_strategy,
         &config.allowed_addresses,
+        shutdown_rx,
     )
     .await
 }

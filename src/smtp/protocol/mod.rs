@@ -58,7 +58,7 @@ fn initialize_trade(
         username: None,
     };
     vec![
-        format!("250-smtp-proxy.mycompany.com greets {}", client)
+        format!("250-smtp2s greets {}", client)
             .as_bytes()
             .to_vec(),
         b"250-AUTH LOGIN PLAIN".to_vec(),
@@ -238,3 +238,6 @@ fn address_to_vec(address: &Option<&Address>) -> Vec<String> {
         None => vec![],
     }
 }
+
+#[cfg(test)]
+mod tests;

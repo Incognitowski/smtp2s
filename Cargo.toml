@@ -15,7 +15,7 @@ path = "src/main.rs"
 async-recursion = "1.1.1"
 async-trait = "0.1.89"
 aws-config = {version = "1.8.6", features = ["behavior-version-latest"]}
-aws-sdk-s3 = {version = "1.104.0", features = ["behavior-version-latest"]}
+aws-sdk-s3 = {version = "1.105.0", features = ["behavior-version-latest"]}
 aws-smithy-http = "0.62.3"
 base64 = "0.22.1"
 chrono = "0.4.41"
@@ -32,3 +32,7 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["fmt", "json", "registry"] }
 twoway = "0.2.2"
 ulid = "1.2.1"
+
+[dev-dependencies]
+lettre = { version = "0.11.7", default-features = false, features = ["tokio1", "builder", "smtp-transport"] }
+tempfile = "3.10.1"

@@ -11,21 +11,29 @@ use crate::smtp::protocol::handle_message;
 use crate::storage::Storage;
 
 pub async fn run_server(
-    addr: &str,
+    listener: TcpListener,
     storage_strategy: Box<dyn Storage>,
     allowed_addresses: &Vec<String>,
+    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Starting TCP server...");
-    let listener = TcpListener::bind(addr).await?;
     info!("Server listening on port {}", listener.local_addr()?.port());
 
     let storage = std::sync::Arc::new(storage_strategy);
 
     loop {
-        let (socket, addr) = listener.accept().await?;
-        let storage_strategy = storage.clone();
-        tokio::spawn(handle_client(socket, addr, storage_strategy, allowed_addresses.clone()));
+        tokio::select!{
+            res = listener.accept() => {
+                let (socket, addr) = res?;
+                let storage_strategy = storage.clone();
+                tokio::spawn(handle_client(socket, addr, storage_strategy, allowed_addresses.clone()));
+            }
+            _ = &mut shutdown_rx => {
+                info!("Shutdown signal received, terminating server.");
+                break;
+            }
+        }
     }
+    Ok(())
 }
 
 #[instrument(name = "client_handler", skip(socket, storage, allowed_addresses), fields(client.addr = %addr))]
