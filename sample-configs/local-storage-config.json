@@ -1,5 +1,6 @@
 {
     "port": 8080,
+    "metrics_port": 9090,
     "strategy": {
         "type": "Local",
         "base_path": "./local-storage"

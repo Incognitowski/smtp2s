@@ -1,5 +1,6 @@
 pub mod smtp;
 pub mod storage;
+pub mod metrics;
 
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -36,6 +37,8 @@ pub async fn run_server(
     Ok(())
 }
 
+use crate::metrics::METRICS_INSTANCE;
+
 #[instrument(name = "client_handler", skip(socket, storage, allowed_addresses), fields(client.addr = %addr))]
 async fn handle_client(
     mut socket: TcpStream,
@@ -43,6 +46,7 @@ async fn handle_client(
     storage: std::sync::Arc<Box<dyn Storage>>,
     allowed_addresses: Vec<String>,
 ) {
+    METRICS_INSTANCE.message_exchange_started.add(1, &[]);
     info!("Connection accepted");
     let mut buf = vec![0; 1024];
     let mut data_vec: Vec<u8> = vec![];

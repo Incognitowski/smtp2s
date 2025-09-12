@@ -1,5 +1,6 @@
 {
     "port": 8080,
+    "metrics_port": 9090,
     "strategy": {
         "type": "S3",
         "bucket_name": "smtp2s-data-storage",

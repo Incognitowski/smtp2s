@@ -1,6 +1,11 @@
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Request, Response, Server};
+use smtp2s::metrics::{gather_metrics, setup_metrics_provider};
 use std::fs::File;
 use std::io::BufReader;
+use std::net::SocketAddr;
 use std::str::FromStr;
+use std::thread;
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
@@ -13,8 +18,8 @@ use smtp2s::storage::local::LocalFileStorage;
 use smtp2s::storage::s3::S3FileStorage;
 use smtp2s::storage::Storage;
 use std::path::PathBuf;
-use tracing::info;
 use tracing::level_filters::LevelFilter;
+use tracing::{error, info};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -56,7 +61,8 @@ enum Strategy {
 
 #[derive(Deserialize, Debug)]
 struct Smpt2sConfig {
-    port: i32,
+    port: i16,
+    metrics_port: Option<u16>,
     strategy: Strategy,
     allowed_addresses: Vec<String>,
 }
@@ -64,7 +70,6 @@ struct Smpt2sConfig {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-    info!("Parsing args...");
     let args = Smpt2sArgs::parse();
 
     let _observability_guard = setup_logging(
@@ -80,6 +85,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Parsing config file contents...");
     let config: Smpt2sConfig = serde_json::from_reader(reader)?;
     info!("Parsed config contents: {:?}", config);
+
+    start_metric_exposure(&config);
 
     let storage_strategy: Box<dyn Storage> = match config.strategy {
         Strategy::Local { base_path } => {
@@ -164,4 +171,30 @@ pub fn setup_logging(
         .with(file_layer)
         .init();
     _guard
+}
+
+fn start_metric_exposure(config: &Smpt2sConfig) {
+    if let Some(port) = config.metrics_port {
+        info!("Serving metrics on port {}...", port);
+        thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(async {
+                setup_metrics_provider();
+                let addr = SocketAddr::from(([127, 0, 0, 1], port));
+                let make_svc = make_service_fn(|_conn| async {
+                    Ok::<_, hyper::Error>(service_fn(metrics_handler))
+                });
+                let server = Server::bind(&addr).serve(make_svc);
+                info!("Metrics server listening on http://{}", addr);
+                if let Err(e) = server.await {
+                    error!("Metric server failed. Error: {}", e);
+                }
+            });
+        });
+    }
+}
+
+async fn metrics_handler(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+    let metrics = gather_metrics();
+    Ok(Response::new(Body::from(metrics)))
 }

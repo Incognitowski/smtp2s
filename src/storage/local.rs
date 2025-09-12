@@ -1,7 +1,10 @@
+use crate::metrics::METRICS_INSTANCE;
+use std::time::Instant;
 use crate::storage::attachment::determine_attachment_name;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use mail_parser::Message;
+use opentelemetry::KeyValue;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use ulid::Ulid;
@@ -17,6 +20,7 @@ pub struct LocalFileStorage {
 #[async_trait]
 impl Storage for LocalFileStorage {
     async fn save(&self, metadata: &Metadata, message: &Message<'_>) -> Result<(), std::io::Error> {
+        let start_time = Instant::now();
         let execution = Ulid::new().to_string();
         let base_folder = &self.base_path.join(&execution);
         fs::create_dir_all(base_folder).await?;
@@ -42,6 +46,7 @@ impl Storage for LocalFileStorage {
         // Save attachments
         save_attachments_from_message(&message, &base_folder.join("attachments"), 0).await?;
 
+        METRICS_INSTANCE.data_storage_timing.record(start_time.elapsed().as_secs_f64(), &[KeyValue::new("provider", "Local")]);
         Ok(())
     }
 }
@@ -57,6 +62,7 @@ async fn save_attachments_from_message(
 
         let path = dedupe_filename(out_dir.join(&name)).await;
         fs::write(&path, part.contents()).await?;
+        METRICS_INSTANCE.attachments_stored.add(1, &[KeyValue::new("provider", "Local")]);
 
         if let Some(nested) = part.message() {
             save_attachments_from_message(nested, out_dir, depth + 1).await?;

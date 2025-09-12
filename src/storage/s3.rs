@@ -1,9 +1,12 @@
+use crate::metrics::METRICS_INSTANCE;
+use std::time::Instant;
 use std::collections::HashSet;
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use aws_sdk_s3::{primitives::ByteStream, Client};
 use mail_parser::Message;
+use opentelemetry::KeyValue;
 use tracing::{error, info};
 use ulid::Ulid;
 
@@ -31,6 +34,7 @@ impl S3FileStorage {
 #[async_trait]
 impl Storage for S3FileStorage {
     async fn save(&self, metadata: &Metadata, message: &Message<'_>) -> Result<(), std::io::Error> {
+        let start_time = Instant::now();
         let execution_id = Ulid::new().to_string();
 
         // Upload metadata
@@ -52,6 +56,7 @@ impl Storage for S3FileStorage {
         self.save_attachments_from_message(message, &execution_id, 0, &mut file_names)
             .await?;
 
+        METRICS_INSTANCE.data_storage_timing.record(start_time.elapsed().as_secs_f64(), &[KeyValue::new("provider", "S3")]);
         Ok(())
     }
 }
@@ -108,6 +113,7 @@ impl S3FileStorage {
                 part.contents().to_vec(),
             )
             .await;
+            METRICS_INSTANCE.attachments_stored.add(1, &[KeyValue::new("provider", "S3")]);
 
             if let Some(nested) = part.message() {
                 self.save_attachments_from_message(nested, execution_id, depth + 1, file_names)

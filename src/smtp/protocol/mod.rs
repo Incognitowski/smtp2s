@@ -1,3 +1,4 @@
+use crate::metrics::METRICS_INSTANCE;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use mail_parser::{Address, MessageParser};
@@ -102,6 +103,7 @@ fn handle_auth_process(
 
             info!(?parsed_username, "Received username");
             if !allowed_addresses.contains(&parsed_username) && !allowed_addresses.contains(&"*".to_string()) {
+                METRICS_INSTANCE.authorization_failed.add(1, &[]);
                 return vec![b"535 5.7.8 Authentication credentials invalid".to_vec()];
             }
             message_metadata.authenticated_user = Some(parsed_username.clone());
@@ -198,6 +200,7 @@ async fn handle_data(
             return vec![b"554 Transaction failed".to_vec()];
         }
 
+        METRICS_INSTANCE.message_processed_successfully.add(1, &[]);
         *state = State::Quitting;
         return vec![b"250 Message accepted for delivery".to_vec()];
     }

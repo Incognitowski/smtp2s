@@ -32,6 +32,13 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["fmt", "json", "registry"] }
 twoway = "0.2.2"
 ulid = "1.2.1"
+lazy_static = "1.5.0"
+opentelemetry = { version = "0.20.0", features = ["metrics"] }
+opentelemetry_sdk = { version = "0.20.0", features = ["rt-tokio"] }
+opentelemetry-prometheus = "0.13.0"
+prometheus = { version = "0.13.4", features = ["process"] }
+hyper = { version = "0.14", features = ["full"] }
+
 
 [dev-dependencies]
 lettre = { version = "0.11.7", default-features = false, features = ["tokio1", "builder", "smtp-transport"] }
