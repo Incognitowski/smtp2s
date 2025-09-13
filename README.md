@@ -66,7 +66,37 @@ storage-folder-or-s3-bucket/
    ├─ metadata.json
 ```
 
-### Get Started
+### Get Started - With Docker
+#### Docker Compose
+```yml
+version: "3.9"
+services:
+  smtp2s:
+    image: incognitowski/smtp2s
+    container_name: smtp2s
+    network_mode: host
+    volumes:
+      - ./sample-configs:/configs
+      - ./logs:/logs
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    command: ["--config-file=/configs/local-storage-config.json", "--log-level=INFO"]
+```
+Learn more about how to configure `smtp2s` in the guide below
+#### Docker CLI
+```sh
+docker run -d \
+  --name smtp2s \
+  --network host \
+  -v $(pwd)/sample-configs:/configs \
+  -v $(pwd)/logs:/logs \
+  incognitowski/smtp2s \
+  --config-file=/configs/local-storage-config.json \
+  --log-level=INFO
+```
+
+### Get Started - Running & Configuring
 
 ##### Running with local storage
 ```sh
